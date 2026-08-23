@@ -28,6 +28,7 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
       bufferCommands: false,
       dbName: env.MONGODB_DB_NAME,
       maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
     };
 
     cached!.promise = mongoose.connect(env.MONGODB_URI, opts).then((m) => {

@@ -38,9 +38,15 @@ export async function POST(req: NextRequest) {
       admin: session,
     });
   } catch (error) {
+    console.error("Admin login API error:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Authentication failed";
-    const status = errorMessage.includes("Too many") ? 429 : 401;
+    const status =
+      errorMessage === "Invalid email or password"
+        ? 401
+        : errorMessage.includes("Too many")
+        ? 429
+        : 500;
 
     return NextResponse.json(
       {
