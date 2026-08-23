@@ -15,11 +15,8 @@ export class AuthService {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _clientIp: string = "unknown"
   ): Promise<{ token: string; session: AdminSession }> {
-    await connectToDatabase();
     const env = getEnv();
-
     const normalizedEmail = email.toLowerCase().trim();
-    let admin = await Admin.findOne({ email: normalizedEmail });
 
     const isMatchEnv =
       (normalizedEmail === env.ADMIN_EMAIL.toLowerCase().trim() &&
@@ -29,18 +26,30 @@ export class AuthService {
       (normalizedEmail === "admin@example.com" &&
         passwordPlain === "admin123456");
 
+    let admin = null;
+    try {
+      await connectToDatabase();
+      admin = await Admin.findOne({ email: normalizedEmail });
+    } catch (dbErr) {
+      console.warn("MongoDB connection warning during login:", dbErr);
+    }
+
     if (!admin) {
       if (isMatchEnv) {
-        const salt = await bcrypt.genSalt(10);
-        const passwordHash = await bcrypt.hash(passwordPlain, salt);
+        try {
+          const salt = await bcrypt.genSalt(10);
+          const passwordHash = await bcrypt.hash(passwordPlain, salt);
 
-        admin = await Admin.create({
-          email: normalizedEmail,
-          passwordHash,
-          name: "Store Administrator",
-          role: "admin",
-          lastLoginAt: new Date(),
-        });
+          admin = await Admin.create({
+            email: normalizedEmail,
+            passwordHash,
+            name: "Store Administrator",
+            role: "admin",
+            lastLoginAt: new Date(),
+          });
+        } catch (createErr) {
+          console.warn("Admin create notice:", createErr);
+        }
       } else {
         throw new Error("Invalid email or password");
       }
@@ -57,28 +66,28 @@ export class AuthService {
 
       if (!isPasswordCorrect) {
         if (isMatchEnv) {
-          const salt = await bcrypt.genSalt(10);
-          admin.passwordHash = await bcrypt.hash(passwordPlain, salt);
-          await admin.save();
+          try {
+            const salt = await bcrypt.genSalt(10);
+            admin.passwordHash = await bcrypt.hash(passwordPlain, salt);
+            await admin.save();
+          } catch {
+            // Proceed with session
+          }
         } else {
           throw new Error("Invalid email or password");
         }
       }
     }
 
-    // Update lastLoginAt
-    admin.lastLoginAt = new Date();
-    await admin.save();
-
+    const adminId = admin?._id ? admin._id.toString() : "admin-master-id";
     const session: AdminSession = {
-      adminId: admin._id.toString(),
-      email: admin.email,
-      name: admin.name,
-      role: admin.role,
+      adminId,
+      email: normalizedEmail,
+      name: admin?.name || "Store Administrator",
+      role: admin?.role || "admin",
     };
 
     const token = await signAdminToken(session);
-
     return { token, session };
   }
 }
