@@ -77,6 +77,7 @@ const ImportHistorySchema = new Schema<IImportHistory>(
   },
   {
     timestamps: true,
+    suppressReservedKeysWarning: true,
   }
 );
 
