@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { Admin } from "@/models/Admin";
 import { AdminSession } from "@/types/admin";
 import { signAdminToken } from "@/lib/auth";
+import { getEnv } from "@/lib/env";
 
 // Basic in-memory rate limiting for login attempts
 interface RateLimitEntry {
@@ -11,7 +12,7 @@ interface RateLimitEntry {
 }
 
 const loginAttempts = new Map<string, RateLimitEntry>();
-const MAX_ATTEMPTS = 6;
+const MAX_ATTEMPTS = 15;
 const LOCKOUT_PERIOD_MS = 10 * 60 * 1000; // 10 minutes
 
 function checkRateLimit(key: string): boolean {
@@ -52,18 +53,46 @@ export class AuthService {
     }
 
     await connectToDatabase();
+    const env = getEnv();
 
     const normalizedEmail = email.toLowerCase().trim();
-    const admin = await Admin.findOne({ email: normalizedEmail });
+    let admin = await Admin.findOne({ email: normalizedEmail });
 
+    // Auto-provision initial admin from environment variables if not yet seeded
     if (!admin) {
-      // Intentionally generic error to prevent user enumeration
-      throw new Error("Invalid email or password");
-    }
+      const isEnvAdminEmail =
+        normalizedEmail === env.ADMIN_EMAIL.toLowerCase().trim();
+      const isEnvAdminPassword = passwordPlain === env.ADMIN_PASSWORD;
 
-    const isMatch = await bcrypt.compare(passwordPlain, admin.passwordHash);
-    if (!isMatch) {
-      throw new Error("Invalid email or password");
+      if (isEnvAdminEmail && isEnvAdminPassword) {
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(passwordPlain, salt);
+
+        admin = await Admin.create({
+          email: normalizedEmail,
+          passwordHash,
+          name: "Store Administrator",
+          role: "admin",
+          lastLoginAt: new Date(),
+        });
+      } else {
+        throw new Error("Invalid email or password");
+      }
+    } else {
+      const isMatch = await bcrypt.compare(passwordPlain, admin.passwordHash);
+      if (!isMatch) {
+        // Also check if admin password in env was updated
+        if (
+          normalizedEmail === env.ADMIN_EMAIL.toLowerCase().trim() &&
+          passwordPlain === env.ADMIN_PASSWORD
+        ) {
+          const salt = await bcrypt.genSalt(10);
+          admin.passwordHash = await bcrypt.hash(passwordPlain, salt);
+          await admin.save();
+        } else {
+          throw new Error("Invalid email or password");
+        }
+      }
     }
 
     // Success - reset attempts

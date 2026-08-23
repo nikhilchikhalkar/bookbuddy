@@ -74,6 +74,7 @@ export default function AdminLoginPage() {
               <input
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@example.com"
@@ -94,6 +95,7 @@ export default function AdminLoginPage() {
               <input
                 type={showPassword ? "text" : "password"}
                 required
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"

@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
+dotenv.config({ path: ".env.example" });
 
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
